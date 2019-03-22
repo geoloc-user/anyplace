@@ -46,6 +46,7 @@ import com.couchbase.client.java.document.JsonDocument
 import com.couchbase.client.java.document.json.{JsonArray, JsonObject}
 import com.couchbase.client.java.env.DefaultCouchbaseEnvironment
 import com.couchbase.client.java.view.{SpatialViewQuery, ViewQuery}
+import com.couchbase.client.java.view.Stale
 import com.couchbase.client.java.{Bucket, CouchbaseCluster, PersistTo}
 import db_models.{Connection, Poi, RadioMapRaw}
 import floor_module.IAlgo
@@ -660,7 +661,7 @@ class CouchbaseDatasource private(hostname: String,
     val startkey = JsonArray.from(buid, floor,timestampX,"","")
     val endkey = JsonArray.from(buid, floor,timestampY,"90", "180")
 
-    val viewQuery = ViewQuery.from("heatmaps", "heatmap_by_floor_building_timestamp").startKey(startkey).endKey(endkey).group(true).reduce(true).inclusiveEnd(true)
+    val viewQuery = ViewQuery.from("heatmaps", "heatmap_by_floor_building").startKey(startkey).endKey(endkey).group(true).reduce(true).inclusiveEnd(true)
     val res = couchbaseClient.query(viewQuery)
 
     var json: JsonObject = null
@@ -861,7 +862,7 @@ class CouchbaseDatasource private(hostname: String,
     val couchbaseClient = getConnection
     val startkey = JsonArray.from(buid, floor,"000000000000000")
     val endkey = JsonArray.from(buid, floor,"999999999999999")
-    val viewQuery = ViewQuery.from("heatmaps", "timestamp_by_floor_building").startKey(startkey).endKey(endkey).group(true)
+    val viewQuery = ViewQuery.from("heatmaps", "heatmap_by_floor_building").startKey(startkey).endKey(endkey).group(true)
     val res = couchbaseClient.query(viewQuery)
 
     println("couchbase results: " + res.totalRows())
@@ -890,10 +891,11 @@ class CouchbaseDatasource private(hostname: String,
     val viewQuery = ViewQuery.from("nav", "building_all").includeDocs(true)
     val res = couchbaseClient.query(viewQuery)
     //
-
+    println("Resposne from CB ", res) 
     for (row <- res.allRows()) {
       try {
         val json = row.document().content()
+        println("building json ", json)
         json.removeKey("geometry")
         json.removeKey("owner_id")
         json.removeKey("co_owners")
@@ -903,11 +905,13 @@ class CouchbaseDatasource private(hostname: String,
         case e: IOException =>
       }
     }
-
+    /*  Commenting dummy code from OpenSource pull
+    *
     val test = JsonObject.empty().put("name", " 星网:")
     val name = " 星网:"
     println(test.toString)
     println(name)
+    */
     buildings
   }
 
@@ -2075,4 +2079,235 @@ class CouchbaseDatasource private(hostname: String,
     true
   }
 
+  override def getLocationHistoryByObjId(obid: String): List[JsonObject] = {
+    val couchbaseClient = getConnection
+    val viewQuery = ViewQuery.from("loc_history", "location_history").key(JsonArray.from(obid))
+
+    val res = couchbaseClient.query(viewQuery)
+    val result = new ArrayList[JsonObject]()
+    val sortedResult = new ArrayList[JsonObject]()
+
+    var json: JsonObject = null
+
+    for (row <- res.allRows()) {
+      try {
+        json = row.document().content()
+        json.removeKey("radio_map")
+        json.removeKey("obid")
+        json.removeKey("objcat")
+        json.removeKey("lhistid")
+        result.add(json)
+      } catch {
+        case e: IOException =>
+      }
+    }
+    println("returning rows")
+    result.sortWith(_.getString("timestamp").toLong > _.getString("timestamp").toLong)
+  }
+
+  override def getLocHistoryObjCat(): List[JsonObject] = {
+    val couchbaseClient = getConnection
+    val viewQuery = ViewQuery.from("loc_history", "location_history_obj_cat").reduce(true)groupLevel(1)
+
+    val res = couchbaseClient.query(viewQuery)
+    val result = new ArrayList[JsonObject]()
+    
+
+    println("[getLocHistoryObjCat]")
+    for (row <- res.allRows()) {
+      try {
+        println("row result key->", row.key, "Value ->" ,row.value)
+        var json: JsonObject = JsonObject.empty()
+
+        //Filter values for uniqueness
+        var temp = new ArrayList[String]()
+        for (t <- row.value.asInstanceOf[JsonArray]) {
+          val tempVal = t.asInstanceOf[String]
+          if (! temp.contains(tempVal)) {
+            temp.add(tempVal)
+          }
+        }
+
+        json.put(row.key.toString, temp)
+        println("json ->", json)
+        result.add(json)
+      } catch {
+        case e: IOException =>
+      }
+    }
+    println("returning rows")
+    result
+  }
+
+  override def getAllAutAccessPoints(): List[JsonObject] = {
+    val couchbaseClient = getConnection
+    val viewQuery = ViewQuery.from("auth_ap", "auth_ap_all")
+
+    val res = couchbaseClient.query(viewQuery)
+    val result = new ArrayList[JsonObject]()
+    var json: JsonObject = null
+
+    for (row <- res.allRows()) {
+      try {
+        json = row.document().content()
+        result.add(json)
+      } catch {
+        case e: IOException =>
+      }
+    }
+    result
+  }
+
+
+  override def getAutAccessPointsBySSID(ssid: String): List[JsonObject] = {
+    val couchbaseClient = getConnection
+    val viewQuery = ViewQuery.from("auth_ap", "auth_ap_by_ssid").key(JsonArray.from(ssid))
+
+    val res = couchbaseClient.query(viewQuery)
+    val result = new ArrayList[JsonObject]()
+    var json: JsonObject = null
+
+    for (row <- res.allRows()) {
+      try {
+        json = row.document().content()
+        result.add(json)
+      } catch {
+        case e: IOException =>
+      }
+    }
+    result
+  }
+
+  override def getAutAccessPointsByBuildingFloor(buid: String, floor: String): List[JsonObject] = {
+    val couchbaseClient = getConnection
+    val viewQuery = ViewQuery.from("auth_ap", "auth_ap_by_buid_floor").key(JsonArray.from(buid, floor)).stale(Stale.FALSE)
+
+    val res = couchbaseClient.query(viewQuery)
+    val result = new ArrayList[JsonObject]()
+    var json: JsonObject = null
+
+    println("totalRows -> " + res.totalRows())
+    for (row <- res.allRows()) {
+      try {
+        if (row.document() != null) {
+          json = row.document().content()
+          result.add(json)
+        }
+      } catch {
+        case e: IOException =>
+      }
+    }
+    println("result", result)
+    result
+  }
+   
+
+  override def dumpAuthorizedRssLogEntriesByBuildingFloor(outFile: FileOutputStream, buid: String, floor_number: String): Long = {
+    LPLogger.info("CouchbaseDatasource::dumpAuthorizedRssLogEntriesByBuildingFloor")
+    val accessPointsJson = getAutAccessPointsByBuildingFloor(buid, floor_number)
+    val accessPoints = accessPointsJson.map{ jsObj => jsObj.getString("ssid")}
+    val accessPointsList = accessPoints.toList
+    println("Filterd access points -> " + accessPointsList)
+
+    val writer = new PrintWriter(outFile)
+    val couchbaseClient = getConnection
+    val queryLimit = 10000
+    var totalFetched = 0
+    var currentFetched: Int = 0
+    var rssEntry: JsonObject = null
+
+    var viewQuery = ViewQuery.from("radio", "raw_radio_building_floor").key(JsonArray.from(buid, floor_number)).includeDocs(true)
+
+    do {
+      viewQuery = ViewQuery.from("radio", "raw_radio_building_floor").key(JsonArray.from(buid, floor_number)).includeDocs(true).limit(queryLimit).skip(totalFetched)
+
+      val res = couchbaseClient.query(viewQuery)
+      if (!(res.totalRows() > 0)) return totalFetched
+      currentFetched = 0
+
+      for (row <- res.allRows()) {
+        currentFetched += 1
+        try {
+          rssEntry = row.document().content()
+          if (accessPointsList.size == 0 || accessPointsList.contains(rssEntry.getString("MAC"))){
+            writer.println(RadioMapRaw.toRawRadioMapRecord(rssEntry))
+          }
+        } catch {
+          case e: IOException => //continue
+        }
+      }
+      totalFetched += currentFetched
+      LPLogger.info("total fetched: " + totalFetched)
+    } while (currentFetched >= queryLimit)
+    writer.flush()
+    writer.close()
+    totalFetched
+  }
+
+
+  override def deleteAuthAccessPoints(accessPointsIds: List[String]) : List[String] = {
+   println("CouchbaseDatasouce::deleteAuthAccessPoints")
+   println("accessPointIds", accessPointsIds)
+   val all_items_failed = new ArrayList[String]()
+   val couchbaseClient = getConnection
+   for (id <- accessPointsIds) {
+      val db_res = couchbaseClient.remove(id, PersistTo.ONE)
+      try {
+        if (db_res.id.ne(id)) {
+          all_items_failed.add(id)
+        } else {
+        }
+      } catch {
+        case e: Exception => all_items_failed.add(id)
+      }
+    }
+    all_items_failed
+  }
+
+  override def floorsAllAsJson(): List[JsonObject] = {
+    val floors = new ArrayList[JsonObject]()
+    val couchbaseClient = getConnection
+    val viewQuery = ViewQuery.from("nav", "floor_by_buid").includeDocs(true)
+
+    val res = couchbaseClient.query(viewQuery)
+    println("couchbase results: " + res.totalRows())
+    if (!res.success()) {
+      throw new DatasourceException("Error retrieving floors from database!")
+    }
+    var json: JsonObject = null
+
+    for (row <- res.allRows()) {
+      try {
+        json = row.document().content()
+        json.removeKey("owner_id")
+        floors.add(json)
+      } catch {
+        case e: IOException =>
+      }
+    }
+    floors
+  }
+   
+  override def getBuidFloorListForMAC(mac_id: String): (String, String) = {
+    val couchbaseClient = getConnection
+    var rssEntry: JsonObject = null
+    var buidFloor : (String, String) = (null, null)
+    val viewQuery = ViewQuery.from("radio", "raw_radio_MAC").key(mac_id).includeDocs(true).descending(true).limit(1)
+    
+    val res = couchbaseClient.query(viewQuery)
+    
+    if (!(res.totalRows() > 0)) return buidFloor
+
+    for (row <- res.allRows()) {
+      try {
+        rssEntry = row.document().content()
+        val buid : String = rssEntry.get("buid").toString
+        val floor: String = rssEntry.get("floor").toString
+        buidFloor = (buid, floor)
+      } catch {
+        case e: IOException => //continue
+      }
+    }
+    buidFloor
+  }
 }

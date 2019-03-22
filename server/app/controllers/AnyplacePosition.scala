@@ -37,6 +37,7 @@ package controllers
 
 import java.io._
 import java.util._
+import play.Play
 
 import com.couchbase.client.java.document.json.{JsonArray, JsonObject}
 import datasources.{DatasourceException, ProxyDataSource}
@@ -49,6 +50,9 @@ import play.libs.F
 import radiomapserver.RadioMap
 import radiomapserver.RadioMap.RadioMap
 import utils._
+
+import play.api.libs.json.Json
+import play.api.libs.json._
 
 import scala.collection.JavaConversions._
 
@@ -85,23 +89,23 @@ object AnyplacePosition extends play.api.mvc.Controller {
         } catch {
           case e: IOException => return AnyResponseHelper.bad_request("Cannot parse json request!")
         }
-        if (json.get("username") == null || json.get("password") == null) {
-          return AnyResponseHelper.bad_request("Cannot parse json request!")
-        }
-        val username = json.getString("username")
-        val password = json.getString("password")
-        if (null == username || null == password) {
-          return AnyResponseHelper.bad_request("Null username or password")
-        }
-        var floorFlag = false
-        if ((username == "anyplace" && password == "floor") ||
-          (username == "anonymous" && password == "anonymous")) {
-          floorFlag = true
-        } else if (username == "anyplace" && password == "123anyplace123rss") {
-          floorFlag = false
-        } else {
-          return AnyResponseHelper.forbidden("Invalid username or password")
-        }
+        // if (json.get("username") == null || json.get("password") == null) {
+        //   return AnyResponseHelper.bad_request("Cannot parse json request!")
+        // }
+        // val username = json.getString("username")
+        // val password = json.getString("password")
+        // if (null == username || null == password) {
+        //   return AnyResponseHelper.bad_request("Null username or password")
+        // }
+        // var floorFlag = false
+        // if ((username == "anyplace" && password == "floor") ||
+        //   (username == "anonymous" && password == "anonymous")) {
+        //   floorFlag = true
+        // } else if (username == "anyplace" && password == "123anyplace123rss") {
+        //   floorFlag = false
+        // } else {
+        //   return AnyResponseHelper.forbidden("Invalid username or password")
+        // }
         val newBuildingsFloors = RadioMap.authenticateRSSlogFileAndReturnBuildingsFloors(radioFile.get.ref.file)
         if (newBuildingsFloors == null) {
           return AnyResponseHelper.bad_request("Corrupted radio file uploaded!")
@@ -153,10 +157,10 @@ object AnyplacePosition extends play.api.mvc.Controller {
           val bbox = GeoPoint.getGeoBoundingBox(java.lang.Double.parseDouble(lat), java.lang.Double.parseDouble(lon),
             500)
           LPLogger.info("LowerLeft: " + bbox(0) + " UpperRight: " + bbox(1))
-          val dir = new File("radiomaps" + AnyplaceServerAPI.URL_SEPARATOR + LPUtils.generateRandomToken() +
-            "_" +
-            System.currentTimeMillis())
-          if (!dir.mkdirs()) {
+            val dir = new File("radiomaps" + AnyplaceServerAPI.URL_SEPARATOR + LPUtils.generateRandomToken() +
+              "_" +
+              System.currentTimeMillis())
+            if (!dir.mkdirs()) {
             null
           }
           val radio = new File(dir.getAbsolutePath + AnyplaceServerAPI.URL_SEPARATOR + "rss-log")
@@ -281,7 +285,11 @@ object AnyplacePosition extends play.api.mvc.Controller {
         }
         var floorFetched: Long = 0l
         try {
-          floorFetched = ProxyDataSource.getIDatasource.dumpRssLogEntriesByBuildingFloor(fout, buid, floor_number)
+          if (Play.application().configuration().getBoolean("filterAccessPoints")) {
+            floorFetched = ProxyDataSource.getIDatasource.dumpAuthorizedRssLogEntriesByBuildingFloor(fout, buid, floor_number)
+          } else {
+            floorFetched = ProxyDataSource.getIDatasource.dumpRssLogEntriesByBuildingFloor(fout, buid, floor_number)
+          }
           try {
             fout.close()
           } catch {
@@ -398,7 +406,11 @@ object AnyplacePosition extends play.api.mvc.Controller {
           }
           var floorFetched: Long = 0l
           try {
-            floorFetched = ProxyDataSource.getIDatasource.dumpRssLogEntriesByBuildingFloor(fout, buid, floor_number)
+            if (Play.application().configuration().getBoolean("filterAccessPoints")) {
+              floorFetched = ProxyDataSource.getIDatasource.dumpAuthorizedRssLogEntriesByBuildingFloor(fout, buid, floor_number)
+            } else {
+              floorFetched = ProxyDataSource.getIDatasource.dumpRssLogEntriesByBuildingFloor(fout, buid, floor_number)
+            }
             try {
               fout.close()
             } catch {
@@ -522,7 +534,9 @@ object AnyplacePosition extends play.api.mvc.Controller {
   def serveFrozenRadioMap(building: String, floor: String, fileName: String) = Action {
 
     def inner(): Result = {
-      val filePath = "radiomaps_frozen" + AnyplaceServerAPI.URL_SEPARATOR + building + AnyplaceServerAPI.URL_SEPARATOR +
+      val radioMapsFrozenDir = Play.application().configuration().getString("radioMapFrozenDir")
+
+      val filePath = radioMapsFrozenDir + AnyplaceServerAPI.URL_SEPARATOR + building + AnyplaceServerAPI.URL_SEPARATOR +
         floor +
         AnyplaceServerAPI.URL_SEPARATOR +
         fileName
@@ -670,7 +684,9 @@ object AnyplacePosition extends play.api.mvc.Controller {
     if (!Floor.checkFloorNumberFormat(floor_number)) {
       return
     }
-    val rmapDir = new File("radiomaps_frozen" + AnyplaceServerAPI.URL_SEPARATOR + buid + AnyplaceServerAPI.URL_SEPARATOR +
+    val radioMapsFrozenDir = Play.application().configuration().getString("radioMapFrozenDir")
+
+    val rmapDir = new File(radioMapsFrozenDir + AnyplaceServerAPI.URL_SEPARATOR + buid + AnyplaceServerAPI.URL_SEPARATOR +
       floor_number)
     if (!rmapDir.exists() && !rmapDir.mkdirs()) {
       return
@@ -685,7 +701,11 @@ object AnyplacePosition extends play.api.mvc.Controller {
     }
     var floorFetched: Long = 0l
     try {
-      floorFetched = ProxyDataSource.getIDatasource.dumpRssLogEntriesByBuildingFloor(fout, buid, floor_number)
+      if (Play.application().configuration().getBoolean("filterAccessPoints")) {
+        floorFetched = ProxyDataSource.getIDatasource.dumpAuthorizedRssLogEntriesByBuildingFloor(fout, buid, floor_number)
+      } else {
+        floorFetched = ProxyDataSource.getIDatasource.dumpRssLogEntriesByBuildingFloor(fout, buid, floor_number)
+      }
       try {
         fout.close()
       } catch {
@@ -992,5 +1012,49 @@ object AnyplacePosition extends play.api.mvc.Controller {
       }
 
       inner(request)
+  }
+
+  def getLocHistoryByObjId() = Action {
+    implicit request =>
+      def inner(request: Request[AnyContent]): Result = {
+        val anyReq = new OAuth2Request(request)
+        if (!anyReq.assertJsonBody()) {
+          return AnyResponseHelper.bad_request(AnyResponseHelper.CANNOT_PARSE_BODY_AS_JSON)
+        }
+        val json = anyReq.getJsonBody
+        val objID = (json \ "obid").as[String]
+        LPLogger.info("AnyplaceMapping::getLocHistoryByObjId(): " + objID.toString)
+        try {
+          val lHistory = ProxyDataSource.getIDatasource.getLocationHistoryByObjId(objID)
+          //println("Sorting")
+          // val sortedList = lHistory.sort(o => o.)
+          // val srtres = sort(lHistory.toString)
+          val res = JsonObject.empty()
+          res.put("lHistory", JsonArray.from(lHistory))
+          return AnyResponseHelper.ok(res, "")
+        } catch {
+          case e: DatasourceException => return AnyResponseHelper.internal_server_error("Server Internal Error [" + e.getMessage + "]")
+        }
+      }
+
+    inner(request)
+  }
+
+  def getLocHistoryObjCat() = Action {
+    implicit request =>
+      def inner(request: Request[AnyContent]): Result = {
+        val anyReq = new OAuth2Request(request)
+        LPLogger.info("AnyplaceMapping::getLocHistoryObjCat")
+        try {
+          val objcatList = ProxyDataSource.getIDatasource.getLocHistoryObjCat()
+          val res = JsonObject.empty()
+          res.put("categories", JsonArray.from(objcatList))
+          return AnyResponseHelper.ok(res, "")
+        } catch {
+          case e: DatasourceException => return AnyResponseHelper.internal_server_error("Server Internal Error [" + e.getMessage + "]")
+        }
+      }
+
+    inner(request)
   }
 }

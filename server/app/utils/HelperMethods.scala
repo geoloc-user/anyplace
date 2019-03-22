@@ -42,6 +42,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.util.HashMap
 
+import play.Play
 import com.couchbase.client.java.document.json.JsonObject
 //remove if not needed
 import scala.collection.JavaConversions._
@@ -81,14 +82,15 @@ object HelperMethods {
     def base64ToString(base64_in: String): String = new String(decodeBase64(base64_in))
 
     def storeRadioMapToServer(file: File): Boolean = {
-        val radio_dir = "radio_maps_raw/"
+        // val radio_dir = "radio_maps_raw/"
+        val radio_dir = Play.application().configuration().getString("radioMapRawDir")
         val dir = new File(radio_dir)
         dir.mkdirs()
         if (!dir.isDirectory || !dir.canWrite() || !dir.canExecute()) {
             return false
         }
         val name = "radiomap_" + LPUtils.generateRandomToken() + System.currentTimeMillis()
-        val dest_f = new File(radio_dir + name)
+        val dest_f = new File(radio_dir + AnyplaceServerAPI.URL_SEPARATOR + name)
         var fout: FileOutputStream = null
         try {
             fout = new FileOutputStream(dest_f)

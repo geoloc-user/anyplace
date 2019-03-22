@@ -8,7 +8,7 @@
       "description": "You can find your API key (access_token) by signing in Anyplace Architect, in the \"More\" section."
     }
   ],
-  "baseurl": "https://ap.cs.ucy.ac.cy/anyplace",
+  "baseurl": "http://geoloc.alstom.hub:9000/anyplace",
   "endpoints": [
     {
       "name": "Navigation",
@@ -198,6 +198,13 @@
           ]
         },
         {
+          "method_name": "All floors",
+          "method_description": "Get all floors",
+          "http_method": "GET",
+          "uri": "/mapping/all_floors ",
+          "parameters": []
+        },
+        {
           "method_name": "POIs by building",
           "method_description": "Get all POIs inside a building",
           "http_method": "POST",
@@ -321,6 +328,108 @@
               "description": "Choices : 1.true,2.false,3.no spatial"
             }
           ]
+        },
+        {
+          "method_name": "Add authorized access points",
+          "method_description": "Add authorized access points",
+          "http_method": "POST",
+          "uri": "/mapping/accesspoints_add",
+          "parameters": [
+            {
+              "name": "buid",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "Building ID (buid)"
+            },
+            {
+              "name": "floor_number",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "Building floor number"
+            },
+            {
+              "name": "aplist",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "Access Point List [{ssid}]"
+            }
+          ]
+        },
+        {
+          "method_name": "Remove authorized access points",
+          "method_description": "Remove authorized access points",
+          "http_method": "POST",
+          "uri": "/mapping/accesspoints_remove",
+          "parameters": [
+            {
+              "name": "buid",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "Building ID (buid)"
+            },
+            {
+              "name": "floor_number",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "Building floor number"
+            },
+            {
+              "name": "aplist",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "Access Point List [{ssid}]"
+            }
+          ]
+        },
+        {
+          "method_name": "Get authorized access points [all]",
+          "method_description": "Get authorized access points [all]",
+          "http_method": "GET",
+          "uri": "/mapping/accesspoints_all",
+          "parameters": []
+        },
+        {
+          "method_name": "Get authorized access points by Building and Floor",
+          "method_description": "Get authorized access points by Building and Floor",
+          "http_method": "GET",
+          "uri": "/mapping/accesspoints_by_buid_floor/:buid/:floor_number",
+          "parameters": [
+            {
+              "name": "buid",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "Building ID (buid)"
+            },
+            {
+              "name": "floor_number",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "Building floor number"
+            }
+          ]
+        },
+        {
+          "method_name": "Get authorized access points by SSID",
+          "method_description": "Get authorized access points by SSID",
+          "http_method": "GET",
+          "uri": "/mapping/accesspoints_by_ssid/:ssid",
+          "parameters": [
+            {
+              "name": "ssid",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "AP SSID"
+            }
+          ]
         }
       ]
     },
@@ -328,6 +437,35 @@
       "name": "Blueprints",
       "description": "Download the blueprints of a building floor",
       "methods": [
+        {
+          "method_name": "Download Base64 as Json",
+          "method_description": "Downloads the floor plan in a base64 png format (w/o prefix)",
+          "http_method": "POST",
+          "uri": "/floorplans64asJson/:buid/:floor_number ",
+          "parameters": [
+            {
+              "name": "access_token",
+              "required": "Y",
+              "type": "text",
+              "default": "api_tester",
+              "description": "OAuth2 Access Token"
+            },
+            {
+              "name": "buid",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "Building ID (buid)"
+            },
+            {
+              "name": "floor_number",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "Building floor number"
+            }
+          ]
+        },
         {
           "method_name": "Download Base64",
           "method_description": "Downloads the floor plan in a base64 png format (w/o prefix)",
@@ -1143,15 +1281,36 @@
           "uri": "/position/estimate_position",
           "parameters": [
             {
+              "name": "obid",
+              "required": "N",
+              "type": "text",
+              "default": "",
+              "description": "Object ID (obid)"
+            },
+            {
+              "name": "objcat",
+              "required": "N",
+              "type": "text",
+              "default": "",
+              "description": "Object Category (objcat)"
+            },
+            {
+              "name": "dvid",
+              "required": "N",
+              "type": "text",
+              "default": "",
+              "description": "Device ID (dvid)"
+            },
+            {
               "name": "buid",
-              "required": "Y",
+              "required": "N",
               "type": "text",
               "default": "",
               "description": "Building ID (buid)"
             },
             {
               "name": "floor",
-              "required": "Y",
+              "required": "N",
               "type": "text",
               "default": "",
               "description": "Floor number (non-whitespace)"
@@ -1164,9 +1323,31 @@
             },
             {
               "name": "algorithm_choice",
-              "required": "Y",
+              "required": "N",
               "type": "integer",
               "description": "choices: KNN_WKNN_Algorithm (1 for non weighted, 2 for weighted), MAP_MMSE_Algorithm (3 for non weighted, 4 for weighted) "
+            }
+          ]
+        },
+        {
+          "method_name": "Get tracking objects with Categories.",
+          "method_description": "Get tracking objects with Categories.",
+          "http_method": "GET",
+          "uri": "/objcategories",
+          "parameters": []
+        },
+        {
+          "method_name": "Get Location History of the object using Object ID",
+          "method_description": "Get Location History of the object using Object ID. ",
+          "http_method": "POST",
+          "uri": "/history",
+          "parameters": [
+            {
+              "name": "obid",
+              "required": "Y",
+              "type": "text",
+              "default": "",
+              "description": "Object ID (obid)"
             }
           ]
         },

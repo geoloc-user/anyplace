@@ -168,4 +168,23 @@ trait IDatasource {
 
   def deleteNotValidDocuments(): Boolean
 
+  def getLocationHistoryByObjId(objId: String): List[JsonObject]
+
+  def getLocHistoryObjCat(): List[JsonObject]
+
+  def getAutAccessPointsBySSID(ssid: String): List[JsonObject]
+
+  def getAutAccessPointsByBuildingFloor(buid: String, floor: String): List[JsonObject]
+
+  def getAllAutAccessPoints(): List[JsonObject]
+
+  def dumpAuthorizedRssLogEntriesByBuildingFloor(outFile: FileOutputStream, buid: String, floor_number: String): Long
+
+  def deleteAuthAccessPoints(accessPointsIds: List[String]) : List[String]
+
+  def floorsAllAsJson(): List[JsonObject]
+
+  def getBuidFloorListForMAC(mac_id: String): (String, String)
+
+
   }
